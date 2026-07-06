@@ -1,0 +1,115 @@
+name: Build and Publish Arch Repository
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '.github/**'
+      - 'README.md'
+      - 'packages.txt'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-repo
+  cancel-in-progress: true
+
+env:
+  RELEASE_TAG: repository
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base-devel
+    steps:
+      - name: Install build dependencies
+        run: |
+          pacman -Syu --noconfirm --needed git sudo rsync github-cli
+          useradd -m builder
+          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Fix workspace ownership for build user
+        run: chown -R builder:builder "$GITHUB_WORKSPACE"
+
+      - name: Build every package directory
+        id: build
+        run: |
+          set -uo pipefail
+          mkdir -p output
+          BUILT=()
+          FAILED=()
+
+          for dir in */ ; do
+            dir="${dir%/}"
+            case "$dir" in
+              .github|output) continue ;;
+            esac
+            [[ -f "$dir/PKGBUILD" ]] || continue
+
+            echo "=== [$dir] building with makepkg ==="
+            if sudo -u builder bash -c "cd '$PWD/$dir' && makepkg -sf --noconfirm --needed" \
+                >/tmp/build-"$dir".log 2>&1; then
+              find "$dir" -maxdepth 1 -name '*.pkg.tar.zst' -exec cp -f {} output/ \;
+              BUILT+=("$dir")
+              echo "=== [$dir] OK ==="
+            else
+              echo "::warning::[$dir] build failed"
+              tail -n 40 /tmp/build-"$dir".log || true
+              FAILED+=("$dir")
+            fi
+          done
+
+          echo "built=${BUILT[*]}" >> "$GITHUB_OUTPUT"
+          echo "failed=${FAILED[*]}" >> "$GITHUB_OUTPUT"
+
+          echo "### Build summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Built OK: ${BUILT[*]:-none}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Failed: ${FAILED[*]:-none}" >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ ${#BUILT[@]} -eq 0 ]]; then
+            echo "::error::No package built successfully, aborting before publish."
+            exit 1
+          fi
+
+      - name: Generate pacman repo database
+        run: |
+          cd output
+          repo-add repository.db.tar.gz *.pkg.tar.zst
+          ls -la
+
+      - name: Publish to fixed GitHub Release (overwrite)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          REPO="${{ github.repository }}"
+          TAG="${{ env.RELEASE_TAG }}"
+
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            echo "=== Release '$TAG' exists, clearing old assets ==="
+            gh release view "$TAG" --repo "$REPO" --json assets -q '.assets[].name' \
+              | while read -r name; do
+                  [[ -n "$name" ]] || continue
+                  echo "Deleting old asset: $name"
+                  gh release delete-asset "$TAG" "$name" --repo "$REPO" -y || true
+                done
+          else
+            echo "=== Creating release '$TAG' ==="
+            gh release create "$TAG" --repo "$REPO" \
+              --title "Arch Package Repository" \
+              --notes "Auto-built pacman repository."
+          fi
+
+          echo "=== Uploading fresh assets ==="
+          gh release upload "$TAG" output/* --repo "$REPO" --clobber
+
+          gh release edit "$TAG" --repo "$REPO" \
+            --notes "Auto-built pacman repository. Last updated: $(date -u '+%Y-%m-%d %H:%M UTC'). Built: ${{ steps.build.outputs.built }}. Failed: ${{ steps.build.outputs.failed }}"

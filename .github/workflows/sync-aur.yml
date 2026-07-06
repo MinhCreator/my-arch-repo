@@ -1,0 +1,82 @@
+name: Sync AUR Packages
+on:
+  schedule:
+    - cron: '0 2 * * *' # 02:00 UTC hang ngay. Doi neu can gio khac.
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - 'packages.txt'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: aur-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Validate packages.txt exists
+        run: |
+          if [[ ! -f packages.txt ]]; then
+            echo "::error::packages.txt not found at repo root"
+            exit 1
+          fi
+
+      - name: Clone and sync each AUR package
+        id: sync
+        run: |
+          set -uo pipefail
+          mkdir -p /tmp/aur-clone
+          SYNCED=()
+          FAILED=()
+
+          while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
+            pkg="$(echo "$raw_line" | sed 's/#.*//' | xargs)"
+            [[ -z "$pkg" ]] && continue
+
+            echo "=== [$pkg] cloning from AUR ==="
+            rm -rf "/tmp/aur-clone/$pkg"
+
+            if ! git clone --depth=1 "https://aur.archlinux.org/${pkg}.git" "/tmp/aur-clone/$pkg" >/tmp/clone.log 2>&1; then
+              echo "::warning::[$pkg] clone failed, skipping"
+              cat /tmp/clone.log
+              FAILED+=("$pkg")
+              continue
+            fi
+
+            echo "=== [$pkg] syncing files into repo ==="
+            mkdir -p "$pkg"
+            find "$pkg" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+            rsync -a --exclude='.git' "/tmp/aur-clone/$pkg/" "$pkg/"
+
+            SYNCED+=("$pkg")
+          done < packages.txt
+
+          echo "synced=${SYNCED[*]}" >> "$GITHUB_OUTPUT"
+          echo "failed=${FAILED[*]}" >> "$GITHUB_OUTPUT"
+
+          echo "### Sync summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Synced: ${SYNCED[*]:-none}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Failed: ${FAILED[*]:-none}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create or update aggregated pull request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: 'chore(aur-sync): sync package sources from AUR'
+          branch: aur-sync
+          delete-branch: true
+          title: 'AUR sync: cap nhat source cua cac package'
+          labels: aur-sync
+          body: |
+            ## REPO AUR cá nhân
