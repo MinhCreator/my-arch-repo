@@ -28,7 +28,7 @@ jobs:
       - name: Install base dependencies
         run: |
           set -euo pipefail
-          pacman -Syu --noconfirm --needed git sudo rsync github-cli fakeroot binutils pacman-contrib
+          pacman -Syu --noconfirm --needed git sudo rsync github-cli fakeroot binutils pacman-contrib paru
           id builder >/dev/null 2>&1 || useradd -m builder
           grep -q '^builder ALL=(ALL) NOPASSWD: ALL$' /etc/sudoers || echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
@@ -54,18 +54,7 @@ jobs:
       - name: Fix workspace ownership for build user
         run: chown -R builder:builder "$GITHUB_WORKSPACE"
 
-      - name: Build and install pikaur from AUR
-        run: |
-          set -euo pipefail
-          sudo -u builder bash -lc '
-            cd /tmp
-            rm -rf pikaur
-            git clone --depth=1 https://aur.archlinux.org/pikaur.git
-            cd pikaur
-            makepkg -si --noconfirm --needed
-          '
-
-      - name: Build every package directory with pikaur
+      - name: Build every package directory with paru
         id: build
         run: |
           set -euo pipefail
@@ -80,9 +69,9 @@ jobs:
             esac
             [[ -f "$dir/PKGBUILD" ]] || continue
 
-            echo "=== [$dir] building with pikaur -P ==="
-            if sudo -u builder bash -lc "cd '$GITHUB_WORKSPACE' && pikaur --noconfirm -P '$GITHUB_WORKSPACE/$dir/PKGBUILD'" \
-                >/tmp/build-"$dir".log 2>&1; then
+
+            echo "=== [$dir] building with paru -B ==="
+            if sudo -u builder bash -lc "cd '$GITHUB_WORKSPACE' && paru --noconfirm -B '$GITHUB_WORKSPACE/$dir'"                 >/tmp/build-"$dir".log 2>&1; then
               find "$dir" -maxdepth 1 -name '*.pkg.tar.zst' -exec cp -f {} output/ \;
               (
                 set -euo pipefail
