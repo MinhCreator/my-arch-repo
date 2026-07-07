@@ -90,7 +90,7 @@ jobs:
       - name: Create or update aggregated pull request
         uses: peter-evans/create-pull-request@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.MY_PAT_TOKEN }}
           commit-message: 'chore(aur-sync): sync package sources and prune deletions'
           branch: aur-sync
           delete-branch: true

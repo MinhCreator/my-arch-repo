@@ -1,4 +1,5 @@
 all-contributors-cli
+awesome-luajit-git
 catppuccin-fcitx5-git
 catppuccin-obs-theme-git
 catppuccin-whiskers-bin
