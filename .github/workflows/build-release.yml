@@ -18,7 +18,7 @@ concurrency:
 
 env:
   RELEASE_TAG: repository
-  REPO_DB_NAME: my-arch-repo
+  REPO_DB_NAME: nanoka
 
 jobs:
   build:
