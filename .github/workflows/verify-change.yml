@@ -34,6 +34,7 @@ jobs:
           curl -sLo /etc/makepkg.conf.d/rust.conf https://raw.githubusercontent.com/CachyOS/docker-makepkg/refs/heads/master/docker-makepkg-v3/rust.conf
           sed -i 's/^PKGDEST=/#PKGDEST=/g' /etc/makepkg.conf
           sed -i 's/^LOGDEST=/#LOGDEST=/g' /etc/makepkg.conf
+          sed -i 's/^PACKAGECARCH=/#PACKAGECARCH=/g' /etc/makepkg.conf
 
       - name: Insert DisableSandboxNetwork into pacman.conf options
         run: |
