@@ -24,6 +24,11 @@ jobs:
           id builder >/dev/null 2>&1 || useradd -m builder
           grep -q '^builder ALL=(ALL) NOPASSWD: ALL$' /etc/sudoers || echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
+      - name: Configure Git Global Safe Directory
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config --global --add safe.directory /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}
+
       - name: Configure makepkg for x86-64-v3 optimization
         run: |
           set -euo pipefail
@@ -62,9 +67,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Fix workspace ownership for build user
-        run: chown -R builder:builder "$GITHUB_WORKSPACE"
-
       - name: Detect changed directories
         id: changed-files
         uses: tj-actions/changed-files@v47.0.6
@@ -75,6 +77,9 @@ jobs:
           files: |
             */**
             !.github/**
+
+      - name: Fix workspace ownership for build user
+        run: chown -R builder:builder "$GITHUB_WORKSPACE"
 
       - name: Filter deleted or invalid packages
         id: changed
