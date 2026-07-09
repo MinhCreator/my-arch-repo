@@ -14,9 +14,9 @@ If you just want to install packages that have already been built in this reposi
 
 ### 1. Check CPU compatibility
 
-This repository currently uses the generic `cachyos/cachyos` container, but the build configuration inside the workflows is set by downloading a specific CachyOS `makepkg.conf` profile.
+This repository currently builds packages inside the `cachyos/cachyos-v3` Docker container.
 
-At the moment, this repository is configured for `x86-64-v3` optimization by downloading the `docker-makepkg-v3` configuration files. That means the published binaries are intended for systems that support the `x86-64-v3` instruction set or newer.
+That means the published binaries are intended for systems that support the `x86-64-v3` instruction set or newer.
 
 Before using this repository, make sure your machine supports `x86-64-v3` or higher. If your CPU only supports generic `x86-64`, the packages from this repository may not run correctly on your system.
 
@@ -48,62 +48,48 @@ Want to build your own automated AUR farm? Follow these steps to fork and config
 - Fork this repository to your own GitHub account.
 - Delete any existing package directories you do not need.
 
-### Step 2: Understand how the build target works
+### Step 2: Choose the correct Docker container
 
-This repository uses the generic `cachyos/cachyos` Docker image in both `build-release.yml` and `verify-change.yml`.
+This repository currently uses the `cachyos/cachyos-v3` Docker container in both `build-release.yml` and `verify-change.yml`.
 
-The actual optimization target is controlled by the downloaded CachyOS `makepkg.conf` profile inside the workflow, not by changing the container image name to `-v3` or `-v4`.
+If you fork this repository, choose the container that matches your target machines:
 
-By default, the workflows download the `docker-makepkg-v3` profile, which targets `x86-64-v3`.
+- `cachyos/cachyos` for generic builds.
+- `cachyos/cachyos-v3` for `x86-64-v3` builds.
+- `cachyos/cachyos-v4` for `x86-64-v4` builds.
 
-### Step 3: Available CachyOS makepkg profiles
+If you need a different target level, edit the workflow files `build-release.yml` and `verify-change.yml` and replace the container image accordingly.
 
-CachyOS provides multiple makepkg profiles that you can use by changing the downloaded config URLs:
+### Step 3: Choose the correct makepkg profile
+
+Besides the container choice, the workflows also download a CachyOS `makepkg.conf` profile.
+
+CachyOS makepkg profiles include:
 
 - `docker-makepkg` for generic builds.
 - `docker-makepkg-v3` for `x86-64-v3` builds.
 - `docker-makepkg-v4` for `x86-64-v4` builds.
 - `docker-makepkg-znver4` for AMD Zen 4 optimized builds.
 
-### Step 4: Customize the workflow files
+In practice, if you want to customize your own fork, review both the container image and the downloaded makepkg profile so they match your intended CPU target.
 
-Update both workflow files:
+### Step 4: Local packages are supported
 
-- `.github/workflows/build-release.yml`
-- `.github/workflows/verify-change.yml`
+This repository also supports local packages that are not synced from the AUR.
 
-Keep the container image as:
+In `packages.txt`, use the prefix `local:` for packages that you maintain yourself inside this repository. These entries are skipped by the AUR sync workflow, so you can manually keep and update their `PKGBUILD` files in your repo.
 
-```yaml
-container:
-  image: cachyos/cachyos
+Example:
+
+```txt
+paru-bin
+local:my-custom-package
 ```
 
-Then modify the `Configure makepkg` step to download the profile you want.
+In this example:
 
-Default `x86-64-v3` example:
-
-```bash
-curl -sLo /etc/makepkg.conf https://raw.githubusercontent.com/CachyOS/docker-makepkg/refs/heads/master/docker-makepkg-v3/makepkg.conf
-mkdir -p /etc/makepkg.conf.d
-curl -sLo /etc/makepkg.conf.d/rust.conf https://raw.githubusercontent.com/CachyOS/docker-makepkg/refs/heads/master/docker-makepkg-v3/rust.conf
-```
-
-To change the build target, replace `docker-makepkg-v3` in both URLs with one of the following:
-
-- `docker-makepkg`
-- `docker-makepkg-v3`
-- `docker-makepkg-v4`
-- `docker-makepkg-znver4`
-
-Examples:
-
-- Use `docker-makepkg` for maximum compatibility across generic machines.
-- Use `docker-makepkg-v3` for systems that support `x86-64-v3`.
-- Use `docker-makepkg-v4` for systems that support `x86-64-v4`.
-- Use `docker-makepkg-znver4` for systems targeting AMD Zen 4.
-
-If you change the optimization target, update this README too so end-users know what CPU level your binaries require.
+- `paru-bin` will be synced from the AUR.
+- `my-custom-package` will be treated as a local package and must be maintained manually by the repository owner.
 
 ### Step 5: Configure Repository Permissions
 
@@ -132,6 +118,7 @@ The entire repository is controlled by a single file: `packages.txt`.
 
 - Open `packages.txt`.
 - Add the exact names of the AUR packages you want to build (one per line).
+- For packages that you maintain manually in this repository, use the `local:` prefix.
 
   > Note on Split Packages: If a package has multiple sub-packages, just write the base package name. The workflow will automatically discover and build all sub-packages.
 
@@ -139,9 +126,9 @@ The entire repository is controlled by a single file: `packages.txt`.
 
 ### Step 8: Relax and Let it Run
 
-- The Sync Workflow runs at a scheduled time. It reads `packages.txt`, pulls the latest PKGBUILDs from the AUR, deletes removed packages, and creates a clean Pull Request.
-- The Verify Workflow automatically triggers on that PR to test-build the packages using paru, ensuring nothing is broken before merging.
-- The Publish Workflow triggers when you merge the PR into `main`. It smartly checks existing assets, only rebuilds what has changed, generates a fresh pacman database, and uploads everything to the repository Release tag.
+- The Sync Workflow runs on a schedule and when `packages.txt` changes. It reads `packages.txt`, pulls the latest PKGBUILDs from the AUR, skips `local:` entries, deletes removed packages, and creates a clean Pull Request.
+- The Verify Workflow automatically triggers on push or pull request and test-builds changed packages using `paru`.
+- The Publish Workflow runs on schedule, on push to `main`, or manually. It checks existing assets, reuses cached packages when possible, falls back to previous release files if needed, generates a fresh pacman database, and uploads everything to the repository Release tag.
 
 **Disclaimer:** `SigLevel = Optional TrustAll` is used for convenience in this personal setup, meaning packages are not GPG-signed. Only use this configuration for repositories you fully control or trust.
 
@@ -159,9 +146,9 @@ Nếu bạn chỉ muốn cài các gói đã được build sẵn từ repositor
 
 #### 1. Kiểm tra khả năng tương thích CPU
 
-Repository này hiện dùng container `cachyos/cachyos` dạng generic, nhưng cấu hình build thực tế trong workflow được quyết định bằng cách tải về một profile `makepkg.conf` của CachyOS.
+Repository này hiện build package trực tiếp bên trong Docker container `cachyos/cachyos-v3`.
 
-Hiện tại repository này đang được cấu hình theo mức tối ưu `x86-64-v3` bằng cách tải bộ cấu hình `docker-makepkg-v3`. Điều đó có nghĩa là các gói nhị phân được phát hành được nhắm tới các máy hỗ trợ tập lệnh `x86-64-v3` trở lên.
+Điều đó có nghĩa là các gói nhị phân được phát hành được nhắm tới các máy hỗ trợ tập lệnh `x86-64-v3` trở lên.
 
 Trước khi dùng repository này, hãy chắc chắn rằng máy của bạn hỗ trợ `x86-64-v3` hoặc cao hơn. Nếu CPU của bạn chỉ hỗ trợ mức `x86-64` generic, các gói từ repository này có thể không chạy đúng trên hệ thống của bạn.
 
@@ -193,62 +180,48 @@ Nếu bạn muốn tự dựng một hệ thống build AUR tự động cho tà
 - Fork repository này về tài khoản GitHub của bạn.
 - Xóa các thư mục gói có sẵn mà bạn không cần.
 
-#### Bước 2: Hiểu cách target build hoạt động
+#### Bước 2: Chọn Docker container phù hợp
 
-Repository này dùng Docker image `cachyos/cachyos` trong cả hai workflow `build-release.yml` và `verify-change.yml`.
+Repository này hiện đang dùng Docker container `cachyos/cachyos-v3` trong cả hai workflow `build-release.yml` và `verify-change.yml`.
 
-Mức tối ưu thực tế không được quyết định bằng việc đổi tên container image sang `-v3` hay `-v4`, mà được quyết định bởi profile `makepkg.conf` của CachyOS được tải về trong workflow.
+Nếu bạn fork repository này, hãy chọn container phù hợp với máy đích của bạn:
 
-Mặc định, workflow đang tải profile `docker-makepkg-v3`, tương ứng với target `x86-64-v3`.
+- `cachyos/cachyos` cho build generic.
+- `cachyos/cachyos-v3` cho build `x86-64-v3`.
+- `cachyos/cachyos-v4` cho build `x86-64-v4`.
 
-#### Bước 3: Các profile makepkg của CachyOS có sẵn
+Nếu bạn muốn đổi target, hãy sửa hai file workflow `build-release.yml` và `verify-change.yml`, rồi thay container image tương ứng.
 
-CachyOS hiện có nhiều profile makepkg mà bạn có thể dùng bằng cách đổi URL cấu hình được tải về:
+#### Bước 3: Chọn makepkg profile phù hợp
+
+Ngoài việc chọn container, workflow còn tải một profile `makepkg.conf` của CachyOS.
+
+Các profile makepkg của CachyOS gồm có:
 
 - `docker-makepkg` cho build generic.
 - `docker-makepkg-v3` cho build `x86-64-v3`.
 - `docker-makepkg-v4` cho build `x86-64-v4`.
 - `docker-makepkg-znver4` cho build tối ưu cho AMD Zen 4.
 
-#### Bước 4: Cách tùy biến file workflow
+Trên thực tế, nếu bạn muốn tùy biến fork của mình, hãy kiểm tra cả container image lẫn makepkg profile được tải về để chúng khớp với CPU target bạn muốn.
 
-Hãy cập nhật cả hai file workflow sau:
+#### Bước 4: Hỗ trợ gói local không sync từ AUR
 
-- `.github/workflows/build-release.yml`
-- `.github/workflows/verify-change.yml`
+Repository này cũng hỗ trợ các gói local không cần đồng bộ từ AUR.
 
-Giữ nguyên container image là:
-
-```yaml
-container:
-  image: cachyos/cachyos
-```
-
-Sau đó sửa bước `Configure makepkg` để tải đúng profile bạn muốn.
-
-Ví dụ mặc định cho `x86-64-v3`:
-
-```bash
-curl -sLo /etc/makepkg.conf https://raw.githubusercontent.com/CachyOS/docker-makepkg/refs/heads/master/docker-makepkg-v3/makepkg.conf
-mkdir -p /etc/makepkg.conf.d
-curl -sLo /etc/makepkg.conf.d/rust.conf https://raw.githubusercontent.com/CachyOS/docker-makepkg/refs/heads/master/docker-makepkg-v3/rust.conf
-```
-
-Để đổi target build, hãy thay `docker-makepkg-v3` trong cả hai URL bằng một trong các giá trị sau:
-
-- `docker-makepkg`
-- `docker-makepkg-v3`
-- `docker-makepkg-v4`
-- `docker-makepkg-znver4`
+Trong `packages.txt`, hãy dùng tiền tố `local:` cho các gói mà bạn tự maintain trong repository này. Các dòng đó sẽ bị bỏ qua trong workflow sync AUR, nên bạn có thể tự quản lý và tự cập nhật `PKGBUILD` của chúng trong repo.
 
 Ví dụ:
 
-- Dùng `docker-makepkg` nếu muốn tương thích rộng kiểu generic.
-- Dùng `docker-makepkg-v3` nếu muốn target `x86-64-v3`.
-- Dùng `docker-makepkg-v4` nếu muốn target `x86-64-v4`.
-- Dùng `docker-makepkg-znver4` nếu muốn tối ưu cho AMD Zen 4.
+```txt
+paru-bin
+local:my-custom-package
+```
 
-Nếu bạn thay target tối ưu, hãy sửa luôn README này để người dùng cuối biết binary của repo yêu cầu mức CPU nào.
+Trong ví dụ trên:
+
+- `paru-bin` sẽ được sync từ AUR.
+- `my-custom-package` sẽ được xem là gói local và chủ repository phải tự maintain thủ công.
 
 #### Bước 5: Cấu hình quyền cho repository
 
@@ -277,6 +250,7 @@ Toàn bộ repository này được điều khiển bởi một file duy nhất 
 
 - Mở file `packages.txt`.
 - Thêm đúng tên các gói AUR mà bạn muốn build, mỗi dòng một gói.
+- Với các gói bạn tự maintain trong repo, hãy dùng tiền tố `local:`.
 
   > Lưu ý về Split Packages: Nếu một gói có nhiều gói con, bạn chỉ cần ghi tên gói gốc. Workflow sẽ tự phát hiện và build toàn bộ các gói con liên quan.
 
@@ -284,8 +258,8 @@ Toàn bộ repository này được điều khiển bởi một file duy nhất 
 
 #### Bước 8: Để hệ thống tự chạy
 
-- **Sync Workflow** sẽ chạy theo lịch, đọc `packages.txt`, kéo PKGBUILD mới nhất từ AUR, xóa gói đã bị loại bỏ, rồi tạo một Pull Request sạch.
-- **Verify Workflow** sẽ tự kích hoạt trên Pull Request đó để test-build gói bằng `paru`, giúp kiểm tra trước khi merge.
-- **Publish Workflow** sẽ chạy khi bạn merge PR vào `main`. Workflow này sẽ kiểm tra asset đã có, chỉ rebuild phần thay đổi, tạo lại pacman database mới, rồi upload tất cả lên Release tag của repository.
+- **Sync Workflow** chạy theo lịch và khi `packages.txt` thay đổi. Workflow này đọc `packages.txt`, kéo PKGBUILD mới nhất từ AUR, bỏ qua các dòng `local:`, xóa các gói đã bị loại bỏ, rồi tạo một Pull Request sạch.
+- **Verify Workflow** sẽ tự kích hoạt trên push hoặc pull request và test-build các gói thay đổi bằng `paru`.
+- **Publish Workflow** chạy theo lịch, khi push vào `main`, hoặc chạy tay. Workflow này kiểm tra asset hiện có, tận dụng cache nếu có thể, fallback về file từ release trước nếu cần, tạo lại pacman database mới, rồi upload toàn bộ lên Release tag của repository.
 
 **Lưu ý:** `SigLevel = Optional TrustAll` được dùng để tiện cho mô hình repository cá nhân này, nghĩa là gói không được ký GPG. Chỉ nên dùng cấu hình này cho repository do chính bạn kiểm soát hoặc bạn thực sự tin tưởng.

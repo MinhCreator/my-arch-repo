@@ -15,7 +15,7 @@ jobs:
   detect-and-build:
     runs-on: ubuntu-latest
     container:
-      image: cachyos/cachyos
+      image: cachyos/cachyos-v3
     steps:
       - name: Install base dependencies
         run: |
