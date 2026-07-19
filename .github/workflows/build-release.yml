@@ -205,6 +205,14 @@ jobs:
             fi
           fi
 
+          for f in output/*:* ; do
+            if [[ -f "$f" ]]; then
+              new_f="${f//:/.}"
+              echo "Renaming $f to $new_f"
+              mv "$f" "$new_f"
+            fi
+          done
+
           sudo -u builder rm -rf "$GITHUB_WORKSPACE/$PKG/src" "$GITHUB_WORKSPACE/$PKG/pkg"
 
       - name: Upload Artifact
