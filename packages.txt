@@ -2,7 +2,6 @@
 # AUR packages
 fcitx5-lotus-git
 pacman
-paru
 catppuccin-fcitx5-git
 zalo-for-linux-git
 yay
