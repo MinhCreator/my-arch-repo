@@ -3,6 +3,7 @@
 fcitx5-lotus-git
 pacman
 paru
+catppuccin-fcitx5-git
 zalo-for-linux-git
 yay
 #####
@@ -10,4 +11,4 @@ yay
 
 #####
 # Local packages
-
+local:linux-nanoka
