@@ -5,6 +5,7 @@ pacman
 catppuccin-fcitx5-git
 zalo-for-linux-git
 yay
+podman-desktop-git
 #####
 # Xlibre packages
 
