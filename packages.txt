@@ -7,6 +7,7 @@ zalo-for-linux-git
 yay
 podman-desktop-git
 php84
+antigravity
 #####
 # Xlibre packages
 
