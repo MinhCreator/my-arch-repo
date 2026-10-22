@@ -7,6 +7,7 @@ zalo-for-linux-git
 yay
 podman-desktop-git
 antigravity
+antigravity-ide
 lmstudio-bin
 #####
 # Xlibre packages
